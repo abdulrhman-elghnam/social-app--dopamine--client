@@ -1,22 +1,21 @@
 import { Button, Card, Typography } from "heroui-native";
 import React from "react";
 import { FlatList, TextInput, View } from "react-native";
-import { apiRequest } from "../../services/api";
-import { useAuth } from "../../context/auth-context";
+import { userApi } from "../../../api/posts";
+import type { PublicUser } from "../../../api/types";
+import { displayName } from "../../../lib/format";
+import { useAuth } from "../../../context/auth-context";
 
 export default function ExploreTab(): React.JSX.Element {
   const { credentials } = useAuth();
   const [query, setQuery] = React.useState("");
-  const [users, setUsers] = React.useState<Record<string, unknown>[]>([]);
+  const [users, setUsers] = React.useState<PublicUser[]>([]);
   const [error, setError] = React.useState("");
 
   React.useEffect(() => {
     if (!credentials) return;
-    apiRequest<Record<string, unknown>[]>(
-      "/user/suggestions/1/10",
-      {},
-      true
-    )
+    userApi
+      .suggestions(1, 10)
       .then((response) => setUsers(response.data ?? []))
       .catch((requestError) => setError(requestError.message));
   }, [credentials]);
@@ -24,11 +23,7 @@ export default function ExploreTab(): React.JSX.Element {
   async function search(): Promise<void> {
     setError("");
     try {
-      const response = await apiRequest<Record<string, unknown>[]>(
-        `/user/search/${encodeURIComponent(query)}/1/10`,
-        {},
-        true
-      );
+      const response = await userApi.search(query.trim(), 1, 10);
       setUsers(response.data ?? []);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Search failed");
@@ -45,18 +40,21 @@ export default function ExploreTab(): React.JSX.Element {
           value={query}
           onChangeText={setQuery}
         />
-        <Button onPress={search} isDisabled={!query}>Search</Button>
+        <Button onPress={search} isDisabled={!query}>
+          Search
+        </Button>
       </View>
       {error ? <Typography.Paragraph className="text-danger">{error}</Typography.Paragraph> : null}
       <FlatList
         data={users}
-        keyExtractor={(item, index) => String(item._id ?? item.id ?? index)}
+        keyExtractor={(item) => item._id}
         renderItem={({ item }) => (
           <Card className="my-1 p-4">
             <Typography.Paragraph className="font-semibold">
-              {String(item.username ?? item.fullName ?? "User")}
+              {displayName(item)}
             </Typography.Paragraph>
-            <Typography.Paragraph>{String(item.email ?? "")}</Typography.Paragraph>
+            <Typography.Paragraph className="text-muted">@{item.username}</Typography.Paragraph>
+            {item.bio ? <Typography.Paragraph>{item.bio}</Typography.Paragraph> : null}
           </Card>
         )}
       />
