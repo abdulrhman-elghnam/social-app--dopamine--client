@@ -1,52 +1,80 @@
-import { Button, Card, Typography, useThemeColor } from "heroui-native";
-import type { JSX } from "react";
-import { View } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import { Button, Typography } from "heroui-native";
+import { router } from "expo-router";
+import React from "react";
+import { ActivityIndicator, TextInput, View } from "react-native";
+import { useAuth } from "../../context/auth-context";
+import { apiRequest } from "../../services/api";
 
-function HeroUILogo({ tintColor }: { tintColor: string }): JSX.Element {
+export default function LoginScreen(): React.JSX.Element {
+  const { credentials, loading: authLoading, signIn } = useAuth();
+  const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
+  const [loading, setLoading] = React.useState(false);
+
+  React.useEffect(() => {
+    if (credentials) router.replace("/profile");
+  }, [credentials]);
+
+  if (authLoading) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (credentials) {
+    return <View className="flex-1 bg-background" />;
+  }
+
+  async function login(): Promise<void> {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await apiRequest<{
+        access_token: string;
+        refresh_token: string;
+      }>("/authentication/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!response.data) throw new Error("Login response did not include credentials");
+      await signIn(response.data);
+      router.replace("/profile");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <Svg width={90} height={30} viewBox="0 0 140 44" fill="none">
-      <Path
-        d="M0.677734 11.3847V24.0405C0.677734 24.6387 0.985209 25.1946 1.49107 25.5109L10.1195 30.9067C11.2693 31.6257 12.7586 30.796 12.7586 29.4363V18.7981C12.7586 18.186 13.0803 17.6194 13.605 17.3074L18.8683 14.1785V41.4437C18.8683 42.7988 20.3486 43.6293 21.4988 42.9195L30.4044 37.4229C30.9152 37.1076 31.2264 36.549 31.2264 35.9471V9.76484C31.2264 8.41634 29.759 7.58483 28.6085 8.28139L18.8683 14.1785V2.55643C18.8683 1.21158 17.408 0.379537 16.2574 1.06878L1.51927 9.89703C0.997365 10.2097 0.677734 10.7747 0.677734 11.3847Z"
-        fill={tintColor}
+    <View className="flex-1 justify-center px-6 bg-background gap-4">
+      <Typography.Heading>Welcome back</Typography.Heading>
+      <Typography.Paragraph>Sign in to your account.</Typography.Paragraph>
+      <TextInput
+        className="rounded-xl border border-divider bg-content1 px-4 py-3 text-foreground"
+        placeholder="Email"
+        autoCapitalize="none"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
       />
-      <Path
-        d="M63.8763 24.0707C63.8763 20.4817 62.4078 18.8253 59.4709 18.8253C56.1076 18.8253 53.7391 21.0799 53.7391 26.1412V37.7363H47.6756V5.52769H53.7391V17.3069C55.2075 14.9142 57.6234 13.7179 60.9394 13.7179C66.5764 13.7179 69.8924 17.1688 69.8924 22.9664V37.7363H63.8763V24.0707Z"
-        fill={tintColor}
+      <TextInput
+        className="rounded-xl border border-divider bg-content1 px-4 py-3 text-foreground"
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
       />
-      <Path
-        d="M84.8996 38.4725C77.3677 38.4725 72.5832 33.5952 72.5832 26.0952C72.5832 18.6872 77.3203 13.7179 84.8996 13.7179C93.0947 13.7179 97.5475 19.5154 96.3158 27.6596H78.6467C78.9783 31.5247 81.252 33.7333 84.8996 33.7333C87.8839 33.7333 89.684 32.2149 90.1577 30.6964H96.1737C95.2263 35.2057 91.0577 38.4725 84.8996 38.4725ZM78.7888 23.6566H90.4419C90.3945 20.4817 88.3102 18.3191 84.7574 18.3191C81.5836 18.3191 79.3572 20.1596 78.7888 23.6566Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M99.6225 20.3437C99.6225 16.5246 101.754 14.4541 105.828 14.4541H113.597V19.4234H105.686V37.7363H99.6225V20.3437Z"
-        fill={tintColor}
-      />
-      <Path
-        d="M126.863 38.4725C119.189 38.4725 114.31 33.5492 114.31 26.0952C114.31 18.6412 119.189 13.7179 126.863 13.7179C134.442 13.7179 139.322 18.6412 139.322 26.0952C139.322 33.5492 134.442 38.4725 126.863 38.4725ZM126.863 33.4572C130.653 33.4572 133.163 30.5584 133.163 26.0952C133.163 21.632 130.653 18.6872 126.863 18.6872C123.026 18.6872 120.515 21.632 120.515 26.0952C120.515 30.5584 123.026 33.4572 126.863 33.4572Z"
-        fill={tintColor}
-      />
-    </Svg>
-  );
-}
-
-export default function HomeTab(): JSX.Element {
-  const themeColorForeground = useThemeColor("foreground");
-
-  return (
-    <View className="flex-1 bg-background justify-center px-6">
-      <Card className="items-center gap-8">
-        <HeroUILogo tintColor={themeColorForeground} />
-        <Typography.Paragraph className="text-center">
-          A modern starter for React Native, preconfigured with HeroUI Native, Uniwind, and Expo
-          Router. Edit{" "}
-          <Typography.Paragraph className="font-semibold">
-            app/(tabs)/index.tsx
-          </Typography.Paragraph>{" "}
-          and watch it reload.
-        </Typography.Paragraph>
-        <Button className="w-full">Get started</Button>
-      </Card>
+      {error ? <Typography.Paragraph className="text-danger">{error}</Typography.Paragraph> : null}
+      <Button onPress={login} isDisabled={loading || !email || !password}>
+        {loading ? "Signing in..." : "Login"}
+      </Button>
+      <Button variant="ghost" onPress={() => router.push("/signup")}>
+        Create an account
+      </Button>
     </View>
   );
 }

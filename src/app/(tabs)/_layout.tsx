@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import type { ComponentProps, JSX } from "react";
 import type { ColorValue } from "react-native";
+import { useAuth } from "../../context/auth-context";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -12,19 +13,31 @@ function TabIcon({ name, color }: { name: IoniconName; color: ColorValue }): JSX
 }
 
 export default function TabsLayout(): JSX.Element {
+  const { credentials } = useAuth();
   return (
     <Tabs screenOptions={{ headerShown: false }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: "Login",
+          href: credentials ? null : "/",
           tabBarIcon: ({ color }) => <TabIcon name="home-outline" color={color} />,
+        }}
+      />
+      <Tabs.Screen name="signup" options={{ href: null }} />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          href: credentials ? "/profile" : null,
+          tabBarIcon: ({ color }) => <TabIcon name="person-outline" color={color} />,
         }}
       />
       <Tabs.Screen
         name="explore"
         options={{
           title: "Explore",
+          href: credentials ? "/explore" : null,
           tabBarIcon: ({ color }) => <TabIcon name="compass-outline" color={color} />,
         }}
       />
