@@ -5,7 +5,7 @@ import { authApi } from "../../api/auth";
 import { AuthLayout } from "../../component/auth-layout";
 import { FormField } from "../../component/form-field";
 import { OtpField } from "../../component/otp-field";
-import { validate } from "../../lib/validation";
+import { schemas, validateForm } from "../../lib/validation";
 import { errorMessage } from "../../services/api";
 
 type Step = "email" | "code" | "password";
@@ -52,9 +52,9 @@ export default function ForgotPasswordScreen(): JSX.Element {
   }
 
   const sendCode = () => {
-    const emailError = validate.email(email);
-    setErrors({ email: emailError });
-    if (emailError) return;
+    const result = validateForm(schemas.forgotPasswordEmail, { email });
+    setErrors(result.success ? {} : result.errors);
+    if (!result.success) return;
     void run(async () => {
       await authApi.requestPasswordReset(normalizedEmail);
       setOtp("");
@@ -63,9 +63,9 @@ export default function ForgotPasswordScreen(): JSX.Element {
   };
 
   const verifyCode = (code = otp) => {
-    const otpError = validate.otp(code);
-    setErrors({ otp: otpError });
-    if (otpError) return;
+    const result = validateForm(schemas.forgotPasswordCode, { otp: code });
+    setErrors(result.success ? {} : result.errors);
+    if (!result.success) return;
     void run(async () => {
       await authApi.verifyPasswordReset(normalizedEmail, code);
       setStep("password");
@@ -73,12 +73,9 @@ export default function ForgotPasswordScreen(): JSX.Element {
   };
 
   const changePassword = () => {
-    const found = {
-      password: validate.password(password),
-      confirmPassword: validate.confirm(password)(confirmPassword),
-    };
-    setErrors(found);
-    if (found.password || found.confirmPassword) return;
+    const result = validateForm(schemas.resetPassword, { password, confirmPassword });
+    setErrors(result.success ? {} : result.errors);
+    if (!result.success) return;
     void run(async () => {
       await authApi.changePassword(normalizedEmail, otp, password, confirmPassword);
       toast.show({

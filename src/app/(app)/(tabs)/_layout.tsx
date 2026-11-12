@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { useThemeColor } from "heroui-native";
 import type { ComponentProps, JSX } from "react";
+import { useRealtime } from "../../../context/realtime-context";
 import type { ColorValue } from "react-native";
 
 export const unstable_settings = { anchor: "index" };
@@ -21,6 +22,7 @@ export default function TabsLayout(): JSX.Element {
     "muted",
     "separator",
   ]);
+  const { unreadChats } = useRealtime();
 
   return (
     <Tabs
@@ -43,6 +45,15 @@ export default function TabsLayout(): JSX.Element {
         options={{
           title: "Explore",
           tabBarIcon: ({ color }) => <TabIcon name="compass-outline" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chats"
+        options={{
+          title: "Chats",
+          tabBarIcon: ({ color }) => <TabIcon name="chatbubbles-outline" color={color} />,
+          tabBarBadge: unreadChats > 0 ? unreadChats : undefined,
+          tabBarBadgeStyle: { backgroundColor: accent },
         }}
       />
       <Tabs.Screen

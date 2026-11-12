@@ -26,6 +26,8 @@ export interface Author {
 /** User card from search, suggestions and follower lists (`PUBLIC_USER_FIELDS`). */
 export interface PublicUser extends Author {
   bio?: string;
+  /** Returned on full profiles (`GET /users/:id`, `/users/me`), not on list cards. */
+  coverImage?: string;
   privacyController: Privacy;
   followersCount: number;
   followingCount: number;
@@ -40,6 +42,8 @@ export interface UserProfile extends PublicUser {
   DOB?: string;
   gender?: "male" | "female";
   isEmailVerified?: boolean;
+  role?: "user" | "admin";
+  provider?: "local" | "google";
   lastSeenAt?: string;
   createdAt?: string;
 }

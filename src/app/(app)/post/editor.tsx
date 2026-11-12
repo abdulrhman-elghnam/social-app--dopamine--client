@@ -22,7 +22,7 @@ import type { Visibility } from "../../../api/types";
 import { VISIBILITY_META } from "../../../component/post-card";
 import { LoadingView } from "../../../component/state-views";
 import { emitPostEvent } from "../../../lib/post-events";
-import { validate } from "../../../lib/validation";
+import { schemas, validateForm } from "../../../lib/validation";
 import { errorMessage } from "../../../services/api";
 
 const MAX_LENGTH = 5000;
@@ -67,13 +67,13 @@ export default function PostEditorScreen(): JSX.Element {
   }, [postId, toast]);
 
   async function save(): Promise<void> {
-    const error = validate.postContent(content);
-    setContentError(error);
-    if (error) return;
+    const result = validateForm(schemas.post, { content });
+    setContentError(result.success ? undefined : result.errors.content);
+    if (!result.success) return;
 
     setSaving(true);
     try {
-      const input = { content: content.trim(), visibility, commentsEnabled };
+      const input = { content: result.data.content, visibility, commentsEnabled };
       if (postId) {
         const post = await postApi.update(postId, input);
         emitPostEvent({ type: "updated", post });

@@ -33,4 +33,7 @@ export const authApi = {
   /** Revokes this device's access + refresh token on the server. */
   logout: (refreshToken: string) =>
     apiRequest("/auth/logout", { method: "POST", body: { refreshToken }, auth: true }),
+  /** Revokes every session of this account, on every device. */
+  logoutAll: () =>
+    apiRequest("/auth/logout", { method: "POST", body: { type: "ALL" }, auth: true }),
 };

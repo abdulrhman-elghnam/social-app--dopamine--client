@@ -1,62 +1,99 @@
-import { Button, Card, Typography } from "heroui-native";
-import React from "react";
-import { FlatList, TextInput, View } from "react-native";
+import { Input, Separator, Typography } from "heroui-native";
+import { useEffect, useRef, useState, type JSX } from "react";
+import { ActivityIndicator, FlatList, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { userApi } from "../../../api/posts";
 import type { PublicUser } from "../../../api/types";
-import { displayName } from "../../../lib/format";
-import { useAuth } from "../../../context/auth-context";
+import { EmptyState } from "../../../component/state-views";
+import { UserRow } from "../../../component/user-row";
+import { openUser } from "../../../lib/navigation";
+import { errorMessage } from "../../../services/api";
 
-export default function ExploreTab(): React.JSX.Element {
-  const { credentials } = useAuth();
-  const [query, setQuery] = React.useState("");
-  const [users, setUsers] = React.useState<PublicUser[]>([]);
-  const [error, setError] = React.useState("");
+const SEARCH_DEBOUNCE_MS = 350;
 
-  React.useEffect(() => {
-    if (!credentials) return;
-    userApi
-      .suggestions(1, 10)
-      .then((response) => setUsers(response.data ?? []))
-      .catch((requestError) => setError(requestError.message));
-  }, [credentials]);
+export default function ExploreTab(): JSX.Element {
+  const insets = useSafeAreaInsets();
+  const [query, setQuery] = useState("");
+  const [users, setUsers] = useState<PublicUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
 
-  async function search(): Promise<void> {
-    setError("");
-    try {
-      const response = await userApi.search(query.trim(), 1, 10);
-      setUsers(response.data ?? []);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Search failed");
-    }
-  }
+  // Suggestions when the box is empty, debounced search otherwise; stale responses are dropped.
+  useEffect(() => {
+    const id = ++requestId.current;
+    const q = query.trim();
+    const timer = setTimeout(
+      () => {
+        (q ? userApi.search(q, 1, 20) : userApi.suggestions(1, 20))
+          .then((response) => {
+            if (id !== requestId.current) return;
+            setUsers(response.data ?? []);
+            setError(null);
+          })
+          .catch((err) => {
+            if (id === requestId.current) setError(errorMessage(err, "Search failed"));
+          })
+          .finally(() => {
+            if (id === requestId.current) setLoading(false);
+          });
+      },
+      q ? SEARCH_DEBOUNCE_MS : 0
+    );
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const searching = !!query.trim();
 
   return (
-    <View className="flex-1 bg-background px-5 pt-14 gap-3">
-      <Typography.Heading>Discover</Typography.Heading>
-      <View className="flex-row gap-2">
-        <TextInput
-          className="flex-1 rounded-xl border border-divider bg-content1 px-4 py-3 text-foreground"
-          placeholder="Search users"
-          value={query}
-          onChangeText={setQuery}
-        />
-        <Button onPress={search} isDisabled={!query}>
-          Search
-        </Button>
-      </View>
-      {error ? <Typography.Paragraph className="text-danger">{error}</Typography.Paragraph> : null}
+    <View className="flex-1 bg-background">
       <FlatList
         data={users}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <Card className="my-1 p-4">
-            <Typography.Paragraph className="font-semibold">
-              {displayName(item)}
+        contentContainerClassName="px-4"
+        contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <View className="gap-3 pb-2">
+            <Typography.Heading type="h3">Discover</Typography.Heading>
+            <Input
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search by name or username"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+            />
+            {error ? (
+              <Typography.Paragraph type="body-sm" className="text-danger">
+                {error}
+              </Typography.Paragraph>
+            ) : null}
+            <Typography.Paragraph type="body-xs" color="muted">
+              {searching ? "Results" : "People you may know"}
             </Typography.Paragraph>
-            <Typography.Paragraph className="text-muted">@{item.username}</Typography.Paragraph>
-            {item.bio ? <Typography.Paragraph>{item.bio}</Typography.Paragraph> : null}
-          </Card>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <UserRow
+            user={item}
+            showBio
+            subtitle={`@${item.username} · ${item.followersCount} followers`}
+            onPress={() => openUser(item._id)}
+          />
         )}
+        ItemSeparatorComponent={() => <Separator />}
+        ListEmptyComponent={
+          loading ? (
+            <ActivityIndicator className="py-8" />
+          ) : error ? undefined : (
+            <EmptyState
+              icon={searching ? "search-outline" : "people-outline"}
+              title={searching ? "No one found" : "No suggestions right now"}
+              description={searching ? "Try a different name or username." : undefined}
+            />
+          )
+        }
       />
     </View>
   );

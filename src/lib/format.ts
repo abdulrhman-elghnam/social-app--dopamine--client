@@ -30,3 +30,11 @@ export function tokenSubject(token: string): string | null {
     return null;
   }
 }
+
+/** 999 → "999", 1200 → "1.2K", 3400000 → "3.4M". */
+export function compactCount(value: number): string {
+  if (value < 1000) return String(Math.max(0, value));
+  const [divisor, suffix] = value < 1_000_000 ? [1000, "K"] : [1_000_000, "M"];
+  const scaled = value / divisor;
+  return `${scaled < 10 ? scaled.toFixed(1).replace(/\.0$/, "") : Math.floor(scaled)}${suffix}`;
+}

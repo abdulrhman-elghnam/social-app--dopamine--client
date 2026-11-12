@@ -5,7 +5,7 @@ import { authApi } from "../../api/auth";
 import { AuthLayout } from "../../component/auth-layout";
 import { FormField } from "../../component/form-field";
 import { OtpField } from "../../component/otp-field";
-import { validate } from "../../lib/validation";
+import { schemas, validateForm } from "../../lib/validation";
 import { errorMessage } from "../../services/api";
 
 export default function VerifyEmailScreen(): JSX.Element {
@@ -18,20 +18,24 @@ export default function VerifyEmailScreen(): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(code = otp): Promise<void> {
-    const found = { email: validate.email(email), otp: validate.otp(code) };
-    setErrors(found);
-    if (found.email || found.otp) return;
+    const result = validateForm(schemas.verifyEmail, { email, otp: code });
+    if (!result.success) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
+    const { email: normalizedEmail, otp: normalizedOtp } = result.data;
 
     setSubmitting(true);
     setServerError(null);
     try {
-      await authApi.verifyEmail(email.trim().toLowerCase(), code);
+      await authApi.verifyEmail(normalizedEmail, normalizedOtp);
       toast.show({
         variant: "success",
         label: "Email verified",
         description: "You can sign in now.",
       });
-      router.replace({ pathname: "/login", params: { email: email.trim().toLowerCase() } });
+      router.replace({ pathname: "/login", params: { email: normalizedEmail } });
     } catch (error) {
       setServerError(errorMessage(error, "Verification failed"));
       setOtp("");

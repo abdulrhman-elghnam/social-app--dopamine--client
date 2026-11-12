@@ -29,8 +29,14 @@ interface AuthContextValue {
   /** True until stored credentials have been read on launch. */
   loading: boolean;
   signIn: (credentials: Credentials) => Promise<void>;
-  signOut: () => Promise<void>;
+  /**
+   * Revokes this session on the server and clears it locally. `everywhere` revokes every session;
+   * `localOnly` skips the server call (e.g. after a password change already revoked them all).
+   */
+  signOut: (options?: { everywhere?: boolean; localOnly?: boolean }) => Promise<void>;
   reloadProfile: () => Promise<void>;
+  /** Merges fields the server just confirmed (e.g. a new avatar path) without refetching. */
+  patchProfile: (changes: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -98,13 +104,20 @@ export function AuthProvider({ children }: PropsWithChildren): ReactNode {
       profile,
       loading,
       reloadProfile,
+      patchProfile: (changes) =>
+        setProfile((current) => (current ? { ...current, ...changes } : current)),
       signIn: async (next) => {
         await saveCredentials(next);
         setCredentials(next);
       },
-      signOut: async () => {
-        // Best effort: revoke the session server-side, but sign out locally regardless.
-        if (credentials) await authApi.logout(credentials.refresh_token).catch(() => undefined);
+      signOut: async (options) => {
+        // Best effort: revoke the session(s) server-side, but sign out locally regardless.
+        if (credentials && !options?.localOnly) {
+          const revoke = options?.everywhere
+            ? authApi.logoutAll()
+            : authApi.logout(credentials.refresh_token);
+          await revoke.catch(() => undefined);
+        }
         await clearCredentials();
         setCredentials(null);
         setProfile(null);

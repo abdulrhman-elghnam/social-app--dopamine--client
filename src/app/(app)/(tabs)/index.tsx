@@ -7,9 +7,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { postApi } from "../../../api/posts";
 import type { Post } from "../../../api/types";
 import { ConfirmDialog } from "../../../component/confirm-dialog";
+import { ReportDialog, type ReportTarget } from "../../../component/report-dialog";
 import { PostCard } from "../../../component/post-card";
 import { EmptyState, LoadingView } from "../../../component/state-views";
 import { useAuth } from "../../../context/auth-context";
+import { useRealtime } from "../../../context/realtime-context";
+import { openUser } from "../../../lib/navigation";
 import { usePaginatedList } from "../../../hook/use-paginated-list";
 import { usePostEvents } from "../../../lib/post-events";
 import { errorMessage } from "../../../services/api";
@@ -18,7 +21,9 @@ export default function PostsScreen(): JSX.Element {
   const insets = useSafeAreaInsets();
   const { toast } = useToast();
   const { profile, userId } = useAuth();
-  const accentForeground = useThemeColor("accent-foreground");
+  const [accentForeground, foreground] = useThemeColor(["accent-foreground", "foreground"]);
+  const { unreadNotifications } = useRealtime();
+  const [report, setReport] = useState<ReportTarget | null>(null);
   const fetcher = useCallback((page: number, size: number) => postApi.feed(page, size), []);
   const list = usePaginatedList<Post>(fetcher);
   const { setItems } = list;
@@ -75,11 +80,30 @@ export default function PostsScreen(): JSX.Element {
           <View className="gap-3 pb-1">
             <View className="flex-row items-center justify-between">
               <View>
-                <Typography.Heading type="h3">My posts</Typography.Heading>
+                <Typography.Heading type="h3">Home</Typography.Heading>
                 <Typography.Paragraph type="body-sm" color="muted">
                   {profile ? `Signed in as @${profile.username}` : " "}
                 </Typography.Paragraph>
               </View>
+              <Button
+                variant="ghost"
+                isIconOnly
+                onPress={() => router.push("/notifications")}
+                accessibilityLabel={
+                  unreadNotifications
+                    ? `Notifications, ${unreadNotifications} unread`
+                    : "Notifications"
+                }
+              >
+                <Ionicons name="notifications-outline" size={24} color={foreground} />
+                {unreadNotifications ? (
+                  <View className="absolute right-1 top-1 min-w-4 items-center rounded-full bg-danger px-1">
+                    <Typography type="body-xs" weight="bold" className="text-danger-foreground">
+                      {unreadNotifications > 99 ? "99+" : unreadNotifications}
+                    </Typography>
+                  </View>
+                ) : null}
+              </Button>
             </View>
             {list.error ? (
               <Alert status="danger">
@@ -102,6 +126,10 @@ export default function PostsScreen(): JSX.Element {
             }
             onEdit={() => router.push({ pathname: "/post/editor", params: { postId: item._id } })}
             onDelete={() => setPendingDelete(item)}
+            onAuthorPress={() =>
+              openUser(typeof item.author === "string" ? item.author : item.author._id)
+            }
+            onReport={() => setReport({ type: "post", id: item._id })}
           />
         )}
         ListEmptyComponent={
@@ -141,6 +169,7 @@ export default function PostsScreen(): JSX.Element {
         isPending={deleting}
         onConfirm={confirmDelete}
       />
+      <ReportDialog target={report} onClose={() => setReport(null)} />
     </View>
   );
 }

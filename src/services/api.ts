@@ -1,6 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:9090";
+/** Socket.IO host. Defaults to the API host, but Vercel can't run WebSockets, so point this at a long-running server. */
+export const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL ?? API_BASE_URL;
 
 const CREDENTIALS_KEY = "credentials";
 
@@ -156,10 +158,13 @@ export async function apiRequest<T, M = PageMeta>(
   return parse<T, M>(response);
 }
 
-/** Absolute URL for a server-relative file path such as `assets/avatars/x.png`. */
+/**
+ * Absolute URL for a server-relative file path such as `assets/avatars/x.png`.
+ * Full URLs and local URIs (an image picked but not uploaded yet) pass through unchanged.
+ */
 export const fileUrl = (path?: string | null): string | undefined =>
   path
-    ? /^https?:\/\//.test(path)
+    ? /^(https?|file|content|blob|data|ph):/.test(path)
       ? path
       : `${API_BASE_URL}/${path.replace(/^\//, "")}`
     : undefined;

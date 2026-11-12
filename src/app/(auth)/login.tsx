@@ -6,7 +6,7 @@ import { authApi } from "../../api/auth";
 import { AuthLayout } from "../../component/auth-layout";
 import { FormField } from "../../component/form-field";
 import { useAuth } from "../../context/auth-context";
-import { validate, validateAll } from "../../lib/validation";
+import { schemas, validateForm } from "../../lib/validation";
 import { ApiError, errorMessage } from "../../services/api";
 
 export default function LoginScreen(): JSX.Element {
@@ -20,18 +20,18 @@ export default function LoginScreen(): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(): Promise<void> {
-    const found = validateAll({
-      email: [email, validate.email],
-      password: [password, validate.loginPassword],
-    });
-    setErrors(found);
-    if (Object.keys(found).length) return;
+    const result = validateForm(schemas.login, { email, password });
+    if (!result.success) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
 
     setSubmitting(true);
     setServerError(null);
     setNeedsVerification(false);
     try {
-      await signIn(await authApi.login(email.trim(), password));
+      await signIn(await authApi.login(result.data.email, result.data.password));
       // Stack.Protected swaps to the (app) group once credentials exist.
     } catch (error) {
       setServerError(errorMessage(error, "Login failed"));

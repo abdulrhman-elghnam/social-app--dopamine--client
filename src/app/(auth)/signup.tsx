@@ -16,7 +16,7 @@ import type { Gender } from "../../api/types";
 import { AuthLayout } from "../../component/auth-layout";
 import { DateField } from "../../component/date-field";
 import { FormField } from "../../component/form-field";
-import { validate, validateAll } from "../../lib/validation";
+import { schemas, validateForm } from "../../lib/validation";
 import { errorMessage } from "../../services/api";
 
 type Field = keyof SignupInput;
@@ -50,32 +50,19 @@ export default function SignupScreen(): JSX.Element {
   };
 
   async function submit(): Promise<void> {
-    const found = validateAll<Field>({
-      fullName: [form.fullName, validate.fullName],
-      username: [form.username, validate.username],
-      email: [form.email, validate.email],
-      phoneNumber: [form.phoneNumber, validate.phone],
-      DOB: [form.DOB, validate.dob],
-      gender: [form.gender, (v) => (v ? undefined : "Choose one")],
-      password: [form.password, validate.password],
-      confirmPassword: [form.confirmPassword, validate.confirm(form.password)],
-    });
-    setErrors(found);
-    if (Object.keys(found).length) return;
+    const result = validateForm(schemas.signup, form);
+    if (!result.success) {
+      setErrors(result.errors);
+      return;
+    }
+    setErrors({});
 
     setSubmitting(true);
     setServerError(null);
     try {
-      const email = form.email.trim().toLowerCase();
-      await authApi.signup({
-        ...form,
-        email,
-        username: form.username.trim(),
-        fullName: form.fullName.trim(),
-        phoneNumber: form.phoneNumber.trim(),
-        gender: form.gender as Gender,
-      });
-      router.replace({ pathname: "/verify-email", params: { email } });
+      // `data` is trimmed and the email lower-cased by the schema.
+      await authApi.signup(result.data);
+      router.replace({ pathname: "/verify-email", params: { email: result.data.email } });
     } catch (error) {
       setServerError(errorMessage(error, "Sign up failed"));
     } finally {

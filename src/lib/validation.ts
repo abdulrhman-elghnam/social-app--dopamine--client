@@ -1,80 +1,191 @@
 /**
- * Client-side mirrors of the server's zod rules (server/source/dependency/pipe/validation.pipe.ts),
- * so users see field-level messages instead of the server's generic "validation failed".
- * Each validator returns an error message, or undefined when the value is valid.
+ * Zod schemas mirroring the server's rules (server/source/dependency/pipe/validation.pipe.ts and
+ * the feature DTOs), so users see field-level messages instead of the server's generic
+ * "validation failed". The regexes and limits are the server's; the messages are friendlier and
+ * more specific (e.g. which password rule failed). Keep both sides in sync.
+ *
+ * Schemas also normalize input (trim, lower-case email), so screens submit `result.data`.
  */
-export type Validator = (value: string) => string | undefined;
+import { z } from "zod";
 
-export const validate = {
-  email: (v: string) =>
-    !v.trim()
-      ? "Email is required"
-      : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim())
-        ? "Enter a valid email"
-        : undefined,
+// ── fields ───────────────────────────────────────────────────────────────────────────────────────
 
-  username: (v: string) =>
-    !/^[a-zA-Z0-9_]{3,30}$/.test(v.trim())
-      ? "3–30 characters: letters, numbers and underscores"
-      : undefined,
+const PASSWORD_CHARS = /^[A-Za-z\d@$!%*?&]+$/;
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const YEAR_MS = 365.25 * 24 * 3600 * 1000;
 
-  fullName: (v: string) =>
-    v.trim().length < 3 || v.trim().length > 30
-      ? "Full name must be 3–30 characters"
-      : !/^[\p{L}]+(?:[ '’-][\p{L}]+)*$/u.test(v.trim())
-        ? "Use letters only"
-        : undefined,
+const yearsSince = (date: Date) => (Date.now() - date.getTime()) / YEAR_MS;
 
-  password: (v: string) => {
-    if (v.length < 8) return "At least 8 characters";
-    if (v.length > 30) return "At most 30 characters";
-    if (!/^[A-Za-z\d@$!%*?&]+$/.test(v)) return "Only letters, digits and @$!%*?& are allowed";
-    if (!/[a-z]/.test(v) || !/[A-Z]/.test(v)) return "Use upper- and lower-case letters";
-    if (!/\d/.test(v)) return "Include at least one number";
-    if (!/[@$!%*?&]/.test(v)) return "Include one of @$!%*?&";
-    return undefined;
-  },
+export const fields = {
+  email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .pipe(z.email("Enter a valid email"))
+    .transform((email) => email.toLowerCase()),
 
-  loginPassword: (v: string) => (!v ? "Password is required" : undefined),
+  username: z
+    .string()
+    .trim()
+    .regex(/^[a-zA-Z0-9_]{3,30}$/, "3–30 characters: letters, numbers and underscores"),
 
-  confirm: (password: string) => (v: string) =>
-    !v ? "Confirm your password" : v !== password ? "Passwords do not match" : undefined,
+  fullName: z
+    .string()
+    .trim()
+    .min(3, "Full name must be 3–30 characters")
+    .max(30, "Full name must be 3–30 characters")
+    .regex(/^[\p{L}]+(?:[ '’-][\p{L}]+)*$/u, "Use letters only"),
 
-  phone: (v: string) =>
-    !/^(?:\+201|01)[0125]\d{8}$/.test(v.trim())
-      ? "Egyptian mobile number, e.g. 01012345678"
-      : undefined,
+  /** Rules checked in order; the first failing one is shown. */
+  password: z
+    .string()
+    .min(8, "At least 8 characters")
+    .max(30, "At most 30 characters")
+    .regex(PASSWORD_CHARS, "Only letters, digits and @$!%*?& are allowed")
+    .regex(/(?=.*[a-z])(?=.*[A-Z])/, "Use upper- and lower-case letters")
+    .regex(/\d/, "Include at least one number")
+    .regex(/[@$!%*?&]/, "Include one of @$!%*?&"),
 
-  dob: (v: string) => {
-    if (!v) return "Select your date of birth";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return "Select a valid date";
-    const date = new Date(`${v}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return "Enter a real date";
-    const now = new Date();
-    const years = (now.getTime() - date.getTime()) / (365.25 * 24 * 3600 * 1000);
-    if (years > 100) return "Must be within the last 100 years";
-    if (years < 18) return "You must be at least 18";
-    return undefined;
-  },
+  /** Login only checks presence, so old accounts and typos get the server's answer. */
+  loginPassword: z.string().min(1, "Password is required"),
 
-  otp: (v: string) => (!/^\d{6}$/.test(v) ? "Enter the 6-digit code" : undefined),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^(?:\+201|01)[0125]\d{8}$/, "Egyptian mobile number, e.g. 01012345678"),
 
-  postContent: (v: string) =>
-    !v.trim() ? "Write something first" : v.length > 5000 ? "At most 5000 characters" : undefined,
+  /** `YYYY-MM-DD`, 18–100 years ago. */
+  dob: z
+    .string()
+    .min(1, "Select your date of birth")
+    .regex(DATE_ONLY, "Select a valid date")
+    .refine((value) => !Number.isNaN(new Date(`${value}T00:00:00`).getTime()), "Enter a real date")
+    .refine(
+      (value) => yearsSince(new Date(`${value}T00:00:00`)) <= 100,
+      "Must be within the last 100 years"
+    )
+    .refine((value) => yearsSince(new Date(`${value}T00:00:00`)) >= 18, "You must be at least 18"),
 
-  commentContent: (v: string) =>
-    !v.trim() ? "Write a comment first" : v.length > 2000 ? "At most 2000 characters" : undefined,
+  gender: z.enum(["MALE", "FEMALE"], "Choose one"),
+
+  otp: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code"),
+
+  postContent: z
+    .string()
+    .trim()
+    .min(1, "Write something first")
+    .max(5000, "At most 5000 characters"),
+
+  commentContent: z
+    .string()
+    .trim()
+    .min(1, "Write a comment first")
+    .max(2000, "At most 2000 characters"),
+
+  groupName: z.string().trim().min(1, "Give your group a name").max(50, "At most 50 characters"),
+
+  /** First or last name on `PATCH /users/me` (server: 2–30 letters, single separators). */
+  namePart: z
+    .string()
+    .trim()
+    .min(2, "2–30 characters")
+    .max(30, "2–30 characters")
+    .regex(/^[\p{L}]+(?:[ '’-][\p{L}]+)*$/u, "Use letters only"),
+
+  bio: z.string().trim().max(500, "At most 500 characters"),
 };
 
-/** Runs every validator and returns only the failing fields. */
-export function validateAll<K extends string>(
-  rules: Record<K, [string, Validator]>
-): Partial<Record<K, string>> {
-  const errors: Partial<Record<K, string>> = {};
-  for (const key of Object.keys(rules) as K[]) {
-    const [value, rule] = rules[key];
-    const message = rule(value);
-    if (message) errors[key] = message;
+// ── forms ────────────────────────────────────────────────────────────────────────────────────────
+
+/** Adds the "passwords match" check to a schema with `password` + `confirmPassword`. */
+const withMatchingPasswords = <
+  S extends z.ZodObject<{ password: z.ZodType<string>; confirmPassword: z.ZodType<string> }>,
+>(
+  schema: S
+) =>
+  schema.refine((data) => data.password === data.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords do not match",
+    // Object refinements are skipped when any field failed; run this one regardless so the
+    // mismatch shows alongside the other errors (the field's own "Confirm…" message wins if empty).
+    when: ({ value }) => typeof value === "object" && value !== null,
+  });
+
+const confirmPassword = z.string().min(1, "Confirm your password");
+
+export const schemas = {
+  login: z.object({ email: fields.email, password: fields.loginPassword }),
+
+  signup: withMatchingPasswords(
+    z.object({
+      fullName: fields.fullName,
+      username: fields.username,
+      email: fields.email,
+      phoneNumber: fields.phone,
+      DOB: fields.dob,
+      gender: fields.gender,
+      password: fields.password,
+      confirmPassword,
+    })
+  ),
+
+  verifyEmail: z.object({ email: fields.email, otp: fields.otp }),
+
+  forgotPasswordEmail: z.object({ email: fields.email }),
+
+  forgotPasswordCode: z.object({ otp: fields.otp }),
+
+  resetPassword: withMatchingPasswords(z.object({ password: fields.password, confirmPassword })),
+
+  post: z.object({ content: fields.postContent }),
+
+  comment: z.object({ content: fields.commentContent }),
+
+  /** Edit profile. Phone may be left empty (the server can't clear it, so it's just not sent). */
+  editProfile: z.object({
+    firstName: fields.namePart,
+    lastName: fields.namePart,
+    username: fields.username,
+    bio: fields.bio,
+    phone: z.union([z.literal(""), fields.phone]),
+    DOB: z.union([z.literal(""), fields.dob]),
+    gender: z.union([z.literal(""), fields.gender]),
+  }),
+
+  changePassword: withMatchingPasswords(
+    z.object({ otp: fields.otp, password: fields.password, confirmPassword })
+  ),
+};
+
+// ── running a schema ─────────────────────────────────────────────────────────────────────────────
+
+/** Field → first error message, for `FieldError` / `FormField error=`. */
+export type FieldErrors<T> = Partial<Record<keyof T & string, string>>;
+
+export type FormResult<S extends z.ZodType> =
+  { success: true; data: z.output<S> } | { success: false; errors: FieldErrors<z.input<S>> };
+
+/**
+ * Validates form values. On failure returns the first message per field (zod reports every
+ * issue; screens show one at a time, in the order the rules are declared).
+ */
+export function validateForm<S extends z.ZodType>(schema: S, values: unknown): FormResult<S> {
+  const result = schema.safeParse(values);
+  if (result.success) return { success: true, data: result.data };
+
+  const errors: Record<string, string> = {};
+  for (const issue of result.error.issues) {
+    const key = issue.path[0];
+    if (typeof key === "string" && !(key in errors)) errors[key] = issue.message;
   }
-  return errors;
+  return { success: false, errors: errors as FieldErrors<z.input<S>> };
+}
+
+/** First error message for a single value, or undefined when valid. */
+export function fieldError(schema: z.ZodType, value: unknown): string | undefined {
+  const result = schema.safeParse(value);
+  return result.success ? undefined : result.error.issues[0]?.message;
 }

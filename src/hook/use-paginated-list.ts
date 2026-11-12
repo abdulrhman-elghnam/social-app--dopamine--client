@@ -66,7 +66,9 @@ export function usePaginatedList<T extends { _id: string }>(fetcher: Fetcher<T>,
     [apply, fetcher, size]
   );
 
-  const hasMore = page < totalPages;
+  // After a failure, stop auto-loading: an empty list keeps firing onEndReached, which would
+  // retry in a tight loop. Pull-to-refresh (or a later success) clears the error.
+  const hasMore = page < totalPages && error === null;
 
   return {
     items,

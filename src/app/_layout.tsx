@@ -1,11 +1,12 @@
 import type { JSX } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { HeroUINativeProvider } from "heroui-native";
+import { HeroUINativeProvider, useThemeColor } from "heroui-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider, useAuth } from "../context/auth-context";
+import { restoreThemePreference, useThemePreference } from "../lib/theme";
 
 import "../global.css";
 
@@ -13,15 +14,23 @@ void SplashScreen.preventAutoHideAsync();
 
 function RootNavigator(): JSX.Element | null {
   const { credentials, loading } = useAuth();
+  const [themeReady, setThemeReady] = useState(false);
+  const background = useThemeColor("background");
 
+  // Apply the saved theme before the splash hides, so there's no flash of the wrong one.
   useEffect(() => {
-    if (!loading) void SplashScreen.hideAsync();
-  }, [loading]);
+    void restoreThemePreference().finally(() => setThemeReady(true));
+  }, []);
 
-  if (loading) return null;
+  const ready = !loading && themeReady;
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: background } }}>
       <Stack.Protected guard={!credentials} redirectTo="/">
         <Stack.Screen name="(auth)" />
       </Stack.Protected>
@@ -32,6 +41,12 @@ function RootNavigator(): JSX.Element | null {
   );
 }
 
+/** Status bar icons contrast with the app theme (not the device's), so a pinned theme looks right. */
+function ThemedStatusBar(): JSX.Element {
+  const { theme } = useThemePreference();
+  return <StatusBar style={theme === "dark" ? "light" : "dark"} />;
+}
+
 export default function RootLayout(): JSX.Element {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -39,7 +54,7 @@ export default function RootLayout(): JSX.Element {
         <AuthProvider>
           <RootNavigator />
         </AuthProvider>
-        <StatusBar style="auto" />
+        <ThemedStatusBar />
       </HeroUINativeProvider>
     </GestureHandlerRootView>
   );

@@ -55,6 +55,9 @@ export const userApi = {
     apiRequest<PublicUser[]>(`/users/${userId}/following?${page(p, size)}`, { auth: true }),
   posts: (userId: string, p: number, size: number) =>
     apiRequest<Post[]>(`/users/${userId}/posts?${page(p, size)}`, { auth: true }),
+  /** Accounts you've blocked, newest first. */
+  blocked: (p: number, size: number) =>
+    apiRequest<PublicUser[]>(`/users/me/blocked?${page(p, size)}`, { auth: true }),
   block: (userId: string) =>
     apiRequest<{ userId: string; isBlocked: true }>(`/users/${userId}/block`, {
       method: "POST",
